@@ -28,6 +28,21 @@ export function hasValidSignature(part) {
 }
 
 /**
+ * Check if conversation history contains Gemini-style messages.
+ * Gemini puts thoughtSignature on tool_use blocks, Claude puts signature on thinking blocks.
+ * @param {Array<Object>} messages - Array of messages
+ * @returns {boolean} True if any tool_use has thoughtSignature (Gemini pattern)
+ */
+export function hasGeminiHistory(messages) {
+    return messages.some(msg =>
+        Array.isArray(msg.content) &&
+        msg.content.some(block =>
+            block.type === 'tool_use' && block.thoughtSignature !== undefined
+        )
+    );
+}
+
+/**
  * Sanitize a thinking part by keeping only allowed fields
  */
 export function sanitizeThinkingPart(part) {
@@ -434,14 +449,14 @@ function stripInvalidThinkingBlocks(messages, targetFamily = null) {
                 return false;
             }
 
-            // Check family compatibility if targetFamily is provided
-            if (targetFamily) {
+            // Check family compatibility only for Gemini targets
+            // Claude can validate its own signatures, so we don't drop for Claude
+            if (targetFamily === 'gemini') {
                 const signature = block.thought === true ? block.thoughtSignature : block.signature;
                 const signatureFamily = getCachedSignatureFamily(signature);
 
-                // Strict validation: If we don't know the family (cache miss) or it doesn't match,
-                // we drop it. We don't assume validity for unknown signatures.
-                if (signatureFamily !== targetFamily) {
+                // For Gemini: drop unknown or mismatched signatures
+                if (!signatureFamily || signatureFamily !== targetFamily) {
                     strippedCount++;
                     return false;
                 }
@@ -450,6 +465,7 @@ function stripInvalidThinkingBlocks(messages, targetFamily = null) {
             return true;
         });
 
+        // Use '.' instead of '' because claude models reject empty text parts
         if (msg.content) {
             return { ...msg, content: filtered.length > 0 ? filtered : [{ type: 'text', text: '.' }] };
         } else if (msg.parts) {

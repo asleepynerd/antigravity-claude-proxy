@@ -15,6 +15,7 @@ import {
     removeTrailingThinkingBlocks,
     reorderAssistantContent,
     filterUnsignedThinkingBlocks,
+    hasGeminiHistory,
     needsThinkingRecovery,
     closeToolLoopForThinking
 } from './thinking-utils.js';
@@ -77,15 +78,20 @@ export function convertAnthropicToGoogle(anthropicRequest) {
         }
     }
 
-    // Apply thinking recovery for thinking models when needed
-    // - Gemini: needs recovery for tool loops/interrupted tools (stripped thinking)
-    // - Claude: needs recovery ONLY when cross-model (incompatible Gemini signatures will be dropped)
+    // Apply thinking recovery for Gemini thinking models when needed
+    // Gemini needs recovery for tool loops/interrupted tools (stripped thinking)
     let processedMessages = messages;
-    const targetFamily = isClaudeModel ? 'claude' : isGeminiModel ? 'gemini' : null;
 
-    if (isThinking && targetFamily && needsThinkingRecovery(messages)) {
-        logger.debug(`[RequestConverter] Applying thinking recovery for ${targetFamily}`);
-        processedMessages = closeToolLoopForThinking(messages, targetFamily);
+    if (isGeminiModel && isThinking && needsThinkingRecovery(messages)) {
+        logger.debug('[RequestConverter] Applying thinking recovery for Gemini');
+        processedMessages = closeToolLoopForThinking(messages, 'gemini');
+    }
+
+    // For Claude: apply recovery only for cross-model (Gemini→Claude) switch
+    // Detected by checking if history has Gemini-style tool_use with thoughtSignature
+    if (isClaudeModel && isThinking && hasGeminiHistory(messages) && needsThinkingRecovery(messages)) {
+        logger.debug('[RequestConverter] Applying thinking recovery for Claude (cross-model from Gemini)');
+        processedMessages = closeToolLoopForThinking(messages, 'claude');
     }
 
     // Convert messages to contents, then filter unsigned thinking blocks
@@ -108,6 +114,8 @@ export function convertAnthropicToGoogle(anthropicRequest) {
         // SAFETY: Google API requires at least one part per content message
         // This happens when all thinking blocks are filtered out (unsigned)
         if (parts.length === 0) {
+            // Use '.' instead of '' because claude models reject empty text parts.
+            // A single period is invisible in practice but satisfies the API requirement.
             logger.warn('[RequestConverter] WARNING: Empty parts array after filtering, adding placeholder');
             parts.push({ text: '.' });
         }
