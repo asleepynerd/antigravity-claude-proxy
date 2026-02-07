@@ -21,6 +21,10 @@ window.Components.serverConfig = () => ({
     editingPresetMode: false,
     editingPresetOriginalName: '',
     presetPreviewExpanded: false,
+    editingPresetConfig: false,
+    editingConfigDraft: {},
+    editingConfigErrors: {},
+    savingPresetConfig: false,
 
     init() {
         // Initial fetch if this is the active sub-tab
@@ -34,6 +38,13 @@ window.Components.serverConfig = () => ({
             if (tab === 'server' && oldTab !== undefined) {
                 this.fetchServerConfig();
                 this.fetchServerPresets();
+            }
+        });
+
+        // Cancel config editing when switching presets
+        this.$watch('selectedServerPreset', () => {
+            if (this.editingPresetConfig) {
+                this.cancelPresetConfigEdit();
             }
         });
     },
@@ -690,36 +701,38 @@ window.Components.serverConfig = () => ({
             return Math.round(val * 100) + '%';
         };
 
+        const V = window.AppConstants.VALIDATION;
+
         const sections = [
             {
                 label: store.t('networkRetry') || 'Network Retry Settings',
                 rows: [
-                    { label: store.t('maxRetries') || 'Max Retries', value: cfg.maxRetries ?? '—', differs: differs(cfg.maxRetries, cur.maxRetries) },
-                    { label: store.t('retryBaseDelay') || 'Retry Base Delay', value: this.formatMsValue(cfg.retryBaseMs), differs: differs(cfg.retryBaseMs, cur.retryBaseMs) },
-                    { label: store.t('retryMaxDelay') || 'Retry Max Delay', value: this.formatMsValue(cfg.retryMaxMs), differs: differs(cfg.retryMaxMs, cur.retryMaxMs) },
+                    { label: store.t('maxRetries') || 'Max Retries', value: cfg.maxRetries ?? '—', differs: differs(cfg.maxRetries, cur.maxRetries), key: 'maxRetries', min: V.MAX_RETRIES_MIN, max: V.MAX_RETRIES_MAX, step: 1 },
+                    { label: store.t('retryBaseDelay') || 'Retry Base Delay', value: this.formatMsValue(cfg.retryBaseMs), differs: differs(cfg.retryBaseMs, cur.retryBaseMs), key: 'retryBaseMs', min: V.RETRY_BASE_MS_MIN, max: V.RETRY_BASE_MS_MAX, step: 100, suffix: 'ms' },
+                    { label: store.t('retryMaxDelay') || 'Retry Max Delay', value: this.formatMsValue(cfg.retryMaxMs), differs: differs(cfg.retryMaxMs, cur.retryMaxMs), key: 'retryMaxMs', min: V.RETRY_MAX_MS_MIN, max: V.RETRY_MAX_MS_MAX, step: 1000, suffix: 'ms' },
                 ]
             },
             {
                 label: store.t('rateLimiting') || 'Rate Limiting',
                 rows: [
-                    { label: store.t('defaultCooldown') || 'Default Cooldown', value: this.formatMsValue(cfg.defaultCooldownMs), differs: differs(cfg.defaultCooldownMs, cur.defaultCooldownMs) },
-                    { label: store.t('maxWaitThreshold') || 'Max Wait Before Error', value: this.formatMsValue(cfg.maxWaitBeforeErrorMs), differs: differs(cfg.maxWaitBeforeErrorMs, cur.maxWaitBeforeErrorMs) },
-                    { label: 'Max Accounts', value: cfg.maxAccounts ?? '—', differs: differs(cfg.maxAccounts, cur.maxAccounts) },
+                    { label: store.t('defaultCooldown') || 'Default Cooldown', value: this.formatMsValue(cfg.defaultCooldownMs), differs: differs(cfg.defaultCooldownMs, cur.defaultCooldownMs), key: 'defaultCooldownMs', min: V.DEFAULT_COOLDOWN_MIN, max: V.DEFAULT_COOLDOWN_MAX, step: 1000, suffix: 'ms' },
+                    { label: store.t('maxWaitThreshold') || 'Max Wait Before Error', value: this.formatMsValue(cfg.maxWaitBeforeErrorMs), differs: differs(cfg.maxWaitBeforeErrorMs, cur.maxWaitBeforeErrorMs), key: 'maxWaitBeforeErrorMs', min: V.MAX_WAIT_MIN, max: V.MAX_WAIT_MAX, step: 1000, suffix: 'ms' },
+                    { label: 'Max Accounts', value: cfg.maxAccounts ?? '—', differs: differs(cfg.maxAccounts, cur.maxAccounts), key: 'maxAccounts', min: V.MAX_ACCOUNTS_MIN, max: V.MAX_ACCOUNTS_MAX, step: 1 },
                 ]
             },
             {
                 label: store.t('quotaProtection') || 'Quota Protection',
                 rows: [
-                    { label: store.t('minimumQuotaLevel') || 'Minimum Quota Level', value: fmtQuota(cfg.globalQuotaThreshold), differs: differs(cfg.globalQuotaThreshold, cur.globalQuotaThreshold) },
+                    { label: store.t('minimumQuotaLevel') || 'Minimum Quota Level', value: fmtQuota(cfg.globalQuotaThreshold), differs: differs(cfg.globalQuotaThreshold, cur.globalQuotaThreshold), key: 'globalQuotaThreshold', min: V.GLOBAL_QUOTA_THRESHOLD_MIN, max: V.GLOBAL_QUOTA_THRESHOLD_MAX, step: 1, suffix: '%' },
                 ]
             },
             {
                 label: store.t('errorHandlingTuning') || 'Error Handling',
                 rows: [
-                    { label: store.t('rateLimitDedupWindow') || 'Dedup Window', value: this.formatMsValue(cfg.rateLimitDedupWindowMs), differs: differs(cfg.rateLimitDedupWindowMs, cur.rateLimitDedupWindowMs) },
-                    { label: store.t('maxConsecutiveFailures') || 'Max Consecutive Failures', value: cfg.maxConsecutiveFailures ?? '—', differs: differs(cfg.maxConsecutiveFailures, cur.maxConsecutiveFailures) },
-                    { label: store.t('extendedCooldown') || 'Extended Cooldown', value: this.formatMsValue(cfg.extendedCooldownMs), differs: differs(cfg.extendedCooldownMs, cur.extendedCooldownMs) },
-                    { label: store.t('maxCapacityRetries') || 'Max Capacity Retries', value: cfg.maxCapacityRetries ?? '—', differs: differs(cfg.maxCapacityRetries, cur.maxCapacityRetries) },
+                    { label: store.t('rateLimitDedupWindow') || 'Dedup Window', value: this.formatMsValue(cfg.rateLimitDedupWindowMs), differs: differs(cfg.rateLimitDedupWindowMs, cur.rateLimitDedupWindowMs), key: 'rateLimitDedupWindowMs', min: V.RATE_LIMIT_DEDUP_MIN, max: V.RATE_LIMIT_DEDUP_MAX, step: 1000, suffix: 'ms' },
+                    { label: store.t('maxConsecutiveFailures') || 'Max Consecutive Failures', value: cfg.maxConsecutiveFailures ?? '—', differs: differs(cfg.maxConsecutiveFailures, cur.maxConsecutiveFailures), key: 'maxConsecutiveFailures', min: V.MAX_CONSECUTIVE_FAILURES_MIN, max: V.MAX_CONSECUTIVE_FAILURES_MAX, step: 1 },
+                    { label: store.t('extendedCooldown') || 'Extended Cooldown', value: this.formatMsValue(cfg.extendedCooldownMs), differs: differs(cfg.extendedCooldownMs, cur.extendedCooldownMs), key: 'extendedCooldownMs', min: V.EXTENDED_COOLDOWN_MIN, max: V.EXTENDED_COOLDOWN_MAX, step: 1000, suffix: 'ms' },
+                    { label: store.t('maxCapacityRetries') || 'Max Capacity Retries', value: cfg.maxCapacityRetries ?? '—', differs: differs(cfg.maxCapacityRetries, cur.maxCapacityRetries), key: 'maxCapacityRetries', min: V.MAX_CAPACITY_RETRIES_MIN, max: V.MAX_CAPACITY_RETRIES_MAX, step: 1 },
                 ]
             }
         ];
@@ -730,5 +743,121 @@ window.Components.serverConfig = () => ({
             strategyDiffers: differs(strategy, currentStrategy),
             sections
         };
+    },
+
+    // ==========================================
+    // Inline Preset Config Editing
+    // ==========================================
+
+    enterPresetConfigEdit() {
+        const preset = this.serverPresets.find(p => p.name === this.selectedServerPreset);
+        if (!preset?.config || preset.builtIn) return;
+
+        const cfg = preset.config;
+        this.editingConfigDraft = {
+            maxRetries: cfg.maxRetries,
+            retryBaseMs: cfg.retryBaseMs,
+            retryMaxMs: cfg.retryMaxMs,
+            defaultCooldownMs: cfg.defaultCooldownMs,
+            maxWaitBeforeErrorMs: cfg.maxWaitBeforeErrorMs,
+            maxAccounts: cfg.maxAccounts,
+            // Store as percentage for editing
+            globalQuotaThreshold: cfg.globalQuotaThreshold ? Math.round(cfg.globalQuotaThreshold * 100) : 0,
+            rateLimitDedupWindowMs: cfg.rateLimitDedupWindowMs,
+            maxConsecutiveFailures: cfg.maxConsecutiveFailures,
+            extendedCooldownMs: cfg.extendedCooldownMs,
+            maxCapacityRetries: cfg.maxCapacityRetries,
+            accountSelection: { strategy: cfg.accountSelection?.strategy || 'hybrid' }
+        };
+        this.editingConfigErrors = {};
+        this.editingPresetConfig = true;
+        this.presetPreviewExpanded = true;
+    },
+
+    cancelPresetConfigEdit() {
+        this.editingPresetConfig = false;
+        this.editingConfigDraft = {};
+        this.editingConfigErrors = {};
+    },
+
+    validatePresetConfigField(key, value) {
+        const V = window.AppConstants.VALIDATION;
+        const numVal = Number(value);
+        const ranges = {
+            maxRetries: [V.MAX_RETRIES_MIN, V.MAX_RETRIES_MAX],
+            retryBaseMs: [V.RETRY_BASE_MS_MIN, V.RETRY_BASE_MS_MAX],
+            retryMaxMs: [V.RETRY_MAX_MS_MIN, V.RETRY_MAX_MS_MAX],
+            defaultCooldownMs: [V.DEFAULT_COOLDOWN_MIN, V.DEFAULT_COOLDOWN_MAX],
+            maxWaitBeforeErrorMs: [V.MAX_WAIT_MIN, V.MAX_WAIT_MAX],
+            maxAccounts: [V.MAX_ACCOUNTS_MIN, V.MAX_ACCOUNTS_MAX],
+            globalQuotaThreshold: [V.GLOBAL_QUOTA_THRESHOLD_MIN, V.GLOBAL_QUOTA_THRESHOLD_MAX],
+            rateLimitDedupWindowMs: [V.RATE_LIMIT_DEDUP_MIN, V.RATE_LIMIT_DEDUP_MAX],
+            maxConsecutiveFailures: [V.MAX_CONSECUTIVE_FAILURES_MIN, V.MAX_CONSECUTIVE_FAILURES_MAX],
+            extendedCooldownMs: [V.EXTENDED_COOLDOWN_MIN, V.EXTENDED_COOLDOWN_MAX],
+            maxCapacityRetries: [V.MAX_CAPACITY_RETRIES_MIN, V.MAX_CAPACITY_RETRIES_MAX]
+        };
+        const range = ranges[key];
+        if (!range) return;
+
+        if (isNaN(numVal) || numVal < range[0] || numVal > range[1]) {
+            this.editingConfigErrors[key] = `${range[0]}–${range[1]}`;
+        } else {
+            delete this.editingConfigErrors[key];
+            this.editingConfigDraft[key] = numVal;
+        }
+    },
+
+    hasPresetConfigErrors() {
+        return Object.keys(this.editingConfigErrors).length > 0;
+    },
+
+    async savePresetConfig() {
+        if (this.hasPresetConfigErrors() || this.savingPresetConfig) return;
+
+        const store = Alpine.store('global');
+        const presetName = this.selectedServerPreset;
+        if (!presetName) return;
+
+        // Build config payload, converting quota % back to fraction
+        const draft = { ...this.editingConfigDraft };
+        draft.globalQuotaThreshold = draft.globalQuotaThreshold / 100;
+        const { accountSelection, ...numericFields } = draft;
+        const configPayload = { ...numericFields };
+        if (accountSelection) {
+            configPayload.accountSelection = accountSelection;
+        }
+
+        this.savingPresetConfig = true;
+        try {
+            const { response, newPassword } = await window.utils.request(
+                `/api/server/presets/${encodeURIComponent(presetName)}`,
+                {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ config: configPayload })
+                },
+                store.webuiPassword
+            );
+            if (newPassword) store.webuiPassword = newPassword;
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || `HTTP ${response.status}`);
+            }
+            const data = await response.json();
+            if (data.status === 'ok') {
+                this.serverPresets = data.presets || [];
+                this.editingPresetConfig = false;
+                this.editingConfigDraft = {};
+                this.editingConfigErrors = {};
+                store.showToast(store.t('presetConfigSaved') || 'Preset config updated', 'success');
+            } else {
+                throw new Error(data.error || 'Failed to save preset config');
+            }
+        } catch (e) {
+            store.showToast((store.t('failedToSavePresetConfig') || 'Failed to update preset config') + ': ' + e.message, 'error');
+        } finally {
+            this.savingPresetConfig = false;
+        }
     }
 });
