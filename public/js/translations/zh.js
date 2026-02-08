@@ -366,11 +366,11 @@ window.translations.zh = {
     // TODO: Missing translations - Hardcoded strings from JS (Error Messages)
     // operationFailed: "Operation failed",
     // unknownError: "Unknown error",
-    // presetNameRequired: "Preset name is required",
+    presetNameRequired: "需要预设名称",
     // saveFailed: "Save failed",
     // failedToSavePreset: "Failed to save preset",
     // noPresetSelected: "No preset selected",
-    // deletePresetConfirm: "Delete preset \"{name}\"?",
+    deletePresetConfirm: "删除预设 \"{name}\"？",
     // deleteFailed: "Delete failed",
     // failedToDeletePreset: "Failed to delete preset",
     // failedToChangePassword: "Failed to change password",
