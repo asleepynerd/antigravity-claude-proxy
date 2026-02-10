@@ -6,13 +6,14 @@ WORKDIR /app
 # Install build dependencies if needed for native modules
 RUN apk add --no-cache python3 make g++
 
-COPY package*.json ./
-RUN npm ci
-
+# Copy source files first so prepare script (post-install) can run build:css
 COPY . .
 
-# Build CSS assets
-RUN npm run build:css
+# Install dependencies and run prepare script
+RUN npm install
+
+# Rebuild dependencies (for native modules like better-sqlite3) - explicit rebuild sometimes helps on alpine
+RUN npm rebuild
 
 # Remove devDependencies to keep image small
 RUN npm prune --production
