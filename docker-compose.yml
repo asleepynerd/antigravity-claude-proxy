@@ -4,8 +4,11 @@ services:
     image: antigravity-claude-proxy:latest
     container_name: antigravity-claude-proxy
     restart: unless-stopped
-    ports:
-      - "8080:8080"
+    # Coolify handles exposure via its proxy - remove conflicting host port binding
+    # ports:
+    #   - "8080:8080"
+    expose:
+      - "8080"
     environment:
       - PORT=8080
       - NODE_ENV=production
